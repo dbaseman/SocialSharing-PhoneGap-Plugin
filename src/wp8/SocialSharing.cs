@@ -1,5 +1,13 @@
+using Microsoft.Phone.Controls;
 using Microsoft.Phone.Tasks;
-
+using Microsoft.Xna.Framework.Media;
+using Microsoft.Xna.Framework.Media.PhoneExtensions;
+using System;
+using System.IO;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using WPCordovaClassLib;
 using WPCordovaClassLib.Cordova;
 using WPCordovaClassLib.Cordova.Commands;
 using WPCordovaClassLib.Cordova.JSON;
@@ -50,25 +58,30 @@ namespace Cordova.Extension.Commands
             DispatchCommandResult(new PluginResult(PluginResult.Status.OK));
         }
 
-        public void shareScreenshot()
+        public void shareScreenshot(string jsonArgs)
         {
             string fileName = string.Format("MoodyBaby_{0:}.jpg", DateTime.Now.Ticks);
-            UIElement content;
-            if (GetContentRoot(out content))
+            CordovaView content;
+
+            Deployment.Current.Dispatcher.BeginInvoke(() =>
             {
-                var currentScreenImage = new WriteableBitmap((int)content.ActualWidth, (int)content.ActualHeight);
-                currentScreenImage.Render(content, new MatrixTransform());
-                currentScreenImage.Invalidate();
-                SaveToMediaLibrary(currentScreenImage, fileName, 100);
-                MessageBox.Show("Captured image " + fileName + " Saved Sucessfully", "WP Capture Screen", MessageBoxButton.OK);
+                if (TryGetContentRoot(out content))
+                {
+                    var currentScreenImage = new WriteableBitmap((int)content.ActualWidth, (int)content.ActualHeight);
+                    currentScreenImage.Render(content, new MatrixTransform());
+                    currentScreenImage.Invalidate();
+                    Picture picture = SaveToMediaLibrary(currentScreenImage, fileName, 100);
+                    
+                    System.Diagnostics.Debug.WriteLine("Captured image " + picture.GetPath() + " Saved Sucessfully", "WP Capture Screen", MessageBoxButton.OK);
 
-                var shareMediaTask = new ShareMediaTask();
-                shareMediaTask.FilePath = fileName;
-                shareMediaTask.Show();
-                DispatchCommandResult(new PluginResult(PluginResult.Status.OK));
-            }
+                    var shareMediaTask = new ShareMediaTask();
+                    shareMediaTask.FilePath = picture.GetPath();
+                    shareMediaTask.Show();
+                    DispatchCommandResult(new PluginResult(PluginResult.Status.OK));
+                }
 
-            DispatchCommandResult(new PluginResult(PluginResult.Status.ERROR));
+                DispatchCommandResult(new PluginResult(PluginResult.Status.ERROR));
+            });
         }
 
         public void canShareViaEmail(string jsonArgs)
@@ -104,7 +117,7 @@ namespace Cordova.Extension.Commands
 
         #region Private methods
 
-        private bool TryGetContentRoot(out UIElement content)
+        private bool TryGetContentRoot(out CordovaView content)
         {
             content = null;
             var frame = Application.Current.RootVisual as PhoneApplicationFrame;
@@ -124,14 +137,14 @@ namespace Cordova.Extension.Commands
             return false;
         }
 
-        private void SaveToMediaLibrary(WriteableBitmap bitmap, string name, int quality)
+        private Picture SaveToMediaLibrary(WriteableBitmap bitmap, string name, int quality)
         {
             using (var stream = new MemoryStream())
             {
                 // Save the picture to the Windows Phone media library.
                 bitmap.SaveJpeg(stream, bitmap.PixelWidth, bitmap.PixelHeight, 0, quality);
                 stream.Seek(0, SeekOrigin.Begin);
-                new MediaLibrary().SavePicture(name, stream);
+                return new MediaLibrary().SavePicture(name, stream);
             }
         }
 
